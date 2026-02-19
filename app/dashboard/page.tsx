@@ -1,9 +1,17 @@
-'use client';
+"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 import RecordingForm from "./RecordingForm";
+
+// -----------------------------
+// Supabase client (browser only)
+// -----------------------------
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 type Recording = {
   id: string;
@@ -37,14 +45,20 @@ export default function Dashboard() {
   const [avgRatings, setAvgRatings] = useState<Record<string, number>>({});
 
   // -----------------------------
-  // Auth & session handling
+  // Auth & session handling (browser-only)
   // -----------------------------
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) setUser(session.user);
-      else router.push("/login");
+    const checkSession = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session?.user) {
+        router.push("/login");
+      } else {
+        setUser(session.user);
+      }
       setLoading(false);
-    });
+    };
+
+    checkSession();
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) setUser(session.user);
@@ -55,7 +69,7 @@ export default function Dashboard() {
   }, [router]);
 
   // -----------------------------
-  // Fetch recordings & reviews
+  // Fetch recordings & reviews (client-side)
   // -----------------------------
   const fetchRecordingsAndReviews = async () => {
     try {
@@ -71,14 +85,11 @@ export default function Dashboard() {
         if (!map[rev.recording_id]) map[rev.recording_id] = [];
         map[rev.recording_id].push({
           ...rev,
-          user_email: rev.user?.email || "Unknown",
+          user_email: (rev as any).user?.email || "Unknown",
         });
       });
       setReviewsMap(map);
 
-      // -----------------------------
-      // Compute average ratings
-      // -----------------------------
       const avgMap: Record<string, number> = {};
       Object.keys(map).forEach((recId) => {
         const revs = map[recId];
@@ -86,20 +97,19 @@ export default function Dashboard() {
         avgMap[recId] = sum / revs.length;
       });
       setAvgRatings(avgMap);
-
     } catch (err: any) {
       console.error("Error fetching recordings/reviews:", err);
     }
   };
 
   useEffect(() => {
-    fetchRecordingsAndReviews();
-  }, []);
+    if (user) fetchRecordingsAndReviews();
+  }, [user]);
 
   if (loading) return <p>Loading dashboard…</p>;
 
   // -----------------------------
-  // Review Form Component
+  // Review Form component
   // -----------------------------
   const ReviewForm = ({
     recordingId,
@@ -211,7 +221,6 @@ export default function Dashboard() {
           <p><strong>Conductor:</strong> {rec.conductor}</p>
           <p><strong>Performers:</strong> {rec.performers.join(", ")}</p>
 
-          {/* Average rating */}
           <p>
             <strong>Average Rating:</strong>{" "}
             {avgRatings[rec.id]
@@ -244,7 +253,6 @@ export default function Dashboard() {
             <p>No reviews yet.</p>
           )}
 
-          {/* New review form */}
           <ReviewForm
             recordingId={rec.id}
             onSuccess={fetchRecordingsAndReviews}
