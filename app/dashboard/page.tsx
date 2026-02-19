@@ -2,16 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "../lib/supabase";
 import RecordingForm from "./RecordingForm";
-
-// -----------------------------
-// Supabase client (browser only)
-// -----------------------------
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 type Recording = {
   id: string;
@@ -45,28 +37,48 @@ export default function Dashboard() {
   const [avgRatings, setAvgRatings] = useState<Record<string, number>>({});
 
   // -----------------------------
-  // Auth & session handling (browser-only)
-  // -----------------------------
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (error || !session?.user) {
-        router.push("/login");
-      } else {
-        setUser(session.user);
-      }
+// Auth & session handling (FIXED)
+// -----------------------------
+useEffect(() => {
+  let mounted = true;
+
+  const initAuth = async () => {
+    // Wait for Supabase to restore session after OAuth redirect
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!mounted) return;
+
+    if (session?.user) {
+      setUser(session.user);
       setLoading(false);
-    };
+      return;
+    }
 
-    checkSession();
+    // Listen for session restoration
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!mounted) return;
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) setUser(session.user);
-      else if (event === "SIGNED_OUT") router.push("/login");
-    });
+        if (session?.user) {
+          setUser(session.user);
+        } else {
+          router.replace("/login"); // replace avoids history issues
+        }
 
-    return () => listener.subscription.unsubscribe();
-  }, [router]);
+        setLoading(false);
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  };
+
+  initAuth();
+
+  return () => {
+    mounted = false;
+  };
+}, [router]);
+
 
   // -----------------------------
   // Fetch recordings & reviews (client-side)
