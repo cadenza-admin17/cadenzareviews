@@ -11,10 +11,13 @@ export default function Login() {
     setLoading(true);
     setMessage("");
 
+    // Use the environment variable for redirect
+    const redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard`;
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: "http://localhost:3000/dashboard", // Change to your live URL in production
+        redirectTo: redirectUrl,
       },
     });
 
