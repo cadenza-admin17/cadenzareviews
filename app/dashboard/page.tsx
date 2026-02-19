@@ -40,26 +40,20 @@ export default function Dashboard() {
 // Auth & session handling (FIXED)
 // -----------------------------
 useEffect(() => {
-  let sub: ReturnType<typeof supabase.auth.onAuthStateChange>["data"]["subscription"] | null = null;
   let cancelled = false;
 
-  const init = async () => {
-    // 1) Try immediately
-    const { data: { session } } = await supabase.auth.getSession();
-    if (cancelled) return;
-
-    if (session?.user) {
-      setUser(session.user);
-      setLoading(false);
-      return;
-    }
-
-    // 2) Wait for auth state changes (OAuth restore)
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+  // Subscribe FIRST so we catch INITIAL_SESSION / SIGNED_IN reliably
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    async (event, session) => {
       if (cancelled) return;
 
-      if (event === "SIGNED_IN" && session?.user) {
-        setUser(session.user);
+      // Supabase fires INITIAL_SESSION on page load
+      if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        if (session?.user) {
+          setUser(session.user);
+        } else {
+          setUser(null);
+        }
         setLoading(false);
       }
 
@@ -68,27 +62,23 @@ useEffect(() => {
         setLoading(false);
         router.replace("/login");
       }
-    });
+    }
+  );
 
-    sub = data.subscription;
-
-    // 3) Fallback: if no session after a short delay, then go to login
-    setTimeout(async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!cancelled && !session?.user) {
-        setLoading(false);
-        router.replace("/login");
-      }
-    }, 1500);
-  };
-
-  init();
+  // Also attempt a session read (helps in some browsers)
+  (async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (cancelled) return;
+    if (session?.user) setUser(session.user);
+    setLoading(false); // IMPORTANT: do NOT redirect here
+  })();
 
   return () => {
     cancelled = true;
-    sub?.unsubscribe();
+    subscription.unsubscribe();
   };
 }, [router]);
+
 
 
 
@@ -131,6 +121,16 @@ useEffect(() => {
   }, [user]);
 
   if (loading) return <p>Loading dashboard…</p>;
+
+if (!user) {
+  return (
+    <div style={{ padding: "2rem" }}>
+      <p>You’re not signed in.</p>
+      <button onClick={() => router.replace("/login")}>Go to login</button>
+    </div>
+  );
+}
+
 
   // -----------------------------
   // Review Form component
