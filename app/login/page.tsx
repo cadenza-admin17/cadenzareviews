@@ -11,8 +11,11 @@ export default function Login() {
     setLoading(true);
     setMessage("");
 
-    // Use the environment variable for redirect
-    const redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard`;
+    // Use environment variable with fallback to localhost for dev
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    const redirectUrl = `${siteUrl}/dashboard`;
+
+    console.log("Redirect URL for Google OAuth:", redirectUrl); // useful for debugging
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -23,6 +26,7 @@ export default function Login() {
 
     if (error) {
       setMessage(error.message);
+      console.error("Supabase OAuth error:", error);
     }
 
     setLoading(false);
