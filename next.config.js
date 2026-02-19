@@ -1,10 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,        // keeps React strict mode enabled
-  swcMinify: true,              // optional, faster builds
-  output: "standalone",         // ensures Vercel builds correctly
-  // Do NOT set pagesDir or disable appDir
-  // Do NOT use next export; keep default server build
+  reactStrictMode: true,
+  output: "standalone", // optional, ensures server build works on Vercel
 };
 
 module.exports = nextConfig;
