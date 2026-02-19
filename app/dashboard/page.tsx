@@ -40,13 +40,13 @@ export default function Dashboard() {
 // Auth & session handling (FIXED)
 // -----------------------------
 useEffect(() => {
-  let mounted = true;
+  let sub: ReturnType<typeof supabase.auth.onAuthStateChange>["data"]["subscription"] | null = null;
+  let cancelled = false;
 
-  const initAuth = async () => {
-    // Wait for Supabase to restore session after OAuth redirect
+  const init = async () => {
+    // 1) Try immediately
     const { data: { session } } = await supabase.auth.getSession();
-
-    if (!mounted) return;
+    if (cancelled) return;
 
     if (session?.user) {
       setUser(session.user);
@@ -54,30 +54,42 @@ useEffect(() => {
       return;
     }
 
-    // Listen for session restoration
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (!mounted) return;
+    // 2) Wait for auth state changes (OAuth restore)
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
 
-        if (session?.user) {
-          setUser(session.user);
-        } else {
-          router.replace("/login"); // replace avoids history issues
-        }
-
+      if (event === "SIGNED_IN" && session?.user) {
+        setUser(session.user);
         setLoading(false);
       }
-    );
 
-    return () => subscription.unsubscribe();
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setLoading(false);
+        router.replace("/login");
+      }
+    });
+
+    sub = data.subscription;
+
+    // 3) Fallback: if no session after a short delay, then go to login
+    setTimeout(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!cancelled && !session?.user) {
+        setLoading(false);
+        router.replace("/login");
+      }
+    }, 1500);
   };
 
-  initAuth();
+  init();
 
   return () => {
-    mounted = false;
+    cancelled = true;
+    sub?.unsubscribe();
   };
 }, [router]);
+
 
 
   // -----------------------------

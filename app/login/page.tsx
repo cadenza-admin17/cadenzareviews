@@ -8,29 +8,21 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   const handleGoogleLogin = async () => {
-    setLoading(true);
-    setMessage("");
+  setLoading(true);
+  setMessage("");
 
-    // Use environment variable with fallback to localhost for dev
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-    const redirectUrl = `${siteUrl}/dashboard`;
+  const redirectUrl = `${window.location.origin}/dashboard`;
 
-    console.log("Redirect URL for Google OAuth:", redirectUrl); // useful for debugging
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: redirectUrl },
+  });
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: redirectUrl,
-      },
-    });
+  if (error) setMessage(error.message);
 
-    if (error) {
-      setMessage(error.message);
-      console.error("Supabase OAuth error:", error);
-    }
+  setLoading(false);
+};
 
-    setLoading(false);
-  };
 
   return (
     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f0f0f0" }}>
